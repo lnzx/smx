@@ -58,8 +58,8 @@ func main() {
 	}
 	// 将逗号分隔的字符串转换为切片
 	diskPaths := strings.Split(*disksStr, ",")
-	log.Info().Msgf("Disk Paths: %v", diskPaths)
-	log.Info().Msgf("Worker Count: %v", *workerCount)
+	log.Info().Msgf("Disks: %v", diskPaths)
+	log.Info().Msgf("Workers: %v", *workerCount)
 
 	manager := NewTaskManager()
 	manager.InitializeTasksWithWorkerCount(diskPaths, *workerCount)
@@ -108,10 +108,10 @@ func main() {
 
 // Task 代表一个任务
 type Task struct {
-	Folder string   `json:"folder"`
-	ID     string   `json:"id"`
-	Files  [][2]int `json:"files"`
-	Status TaskStatus
+	Folder string     `json:"folder"`
+	ID     string     `json:"id"`
+	Files  [][2]int   `json:"files"`
+	Status TaskStatus `json:"status"`
 }
 
 // TaskManager 管理任务分配
