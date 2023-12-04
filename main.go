@@ -59,7 +59,7 @@ func main() {
 	// 将逗号分隔的字符串转换为切片
 	diskPaths := strings.Split(*disksStr, ",")
 	log.Info().Msgf("Disks: %v", diskPaths)
-	log.Info().Msgf("Workers: %v", *workerCount)
+	log.Info().Msgf("Workers: %v\n", *workerCount)
 
 	manager := NewTaskManager()
 	manager.InitializeTasksWithWorkerCount(diskPaths, *workerCount)
@@ -90,7 +90,7 @@ func main() {
 				http.Error(w, "json marshal error", http.StatusInternalServerError)
 				return
 			}
-			log.Info().Msgf("task %s workId %s", string(rsp), workId)
+			log.Info().Msgf("task %s workId %d", string(rsp), workId)
 			w.Header().Set("Content-Type", "application/json")
 			_, err = w.Write(rsp)
 			if err != nil {
