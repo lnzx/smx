@@ -140,12 +140,11 @@ func (m *TaskManager) InitializeTasksWithWorkerCount(diskPaths []string, workerC
 			if _, err := os.Stat(folder); os.IsNotExist(err) {
 				log.Info().Msgf("folder is not exist %s, creating now", folder)
 				// 文件夹不存在，直接生成key.bin,会自动创建文件夹
-				id, err := genKey(folder)
+				_, err = genKey(folder)
 				if err != nil {
 					log.Warn().Err(err).Msgf("failed to create folder and key.bin %s", folder)
 					continue // 如果创建失败，跳过这个文件夹
 				}
-				log.Info().Msgf("created folder %s and key.bin ID %s", folder, *id)
 			} else {
 				filename := filepath.Join(folder, edKeyFileName)
 				if _, err := os.Stat(filename); os.IsNotExist(err) {
