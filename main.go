@@ -138,7 +138,7 @@ func (m *TaskManager) InitializeTasksWithWorkerCount(diskPaths []string, workerC
 			log.Info().Msgf("init folder %s", folder)
 			// 检查文件夹是否存在
 			if _, err := os.Stat(folder); os.IsNotExist(err) {
-				log.Info().Msgf("folder is not exist %s", folder)
+				log.Info().Msgf("folder is not exist %s, creating now", folder)
 				// 文件夹不存在，直接生成key.bin,会自动创建文件夹
 				id, err := genKey(folder)
 				if err != nil {
