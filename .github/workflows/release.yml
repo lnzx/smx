@@ -21,6 +21,6 @@ jobs:
           goarch: ${{ matrix.goarch }}
           ldflags: "-w -s"
           compress_assets: "OFF"
-          asset_name: smx
+          asset_name: smx-${{ matrix.goarch }}
           md5sum: false
           overwrite: true
