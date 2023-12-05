@@ -92,10 +92,8 @@ func main() {
 			}
 			log.Info().Msgf("task %s workId %d", string(rsp), workId)
 			w.Header().Set("Content-Type", "application/json")
-			_, err = w.Write(rsp)
-			if err != nil {
+			if _, err = w.Write(rsp); err != nil {
 				log.Error().Err(err).Msg("write response error")
-				return
 			}
 			return
 		}
@@ -103,15 +101,41 @@ func main() {
 		http.Error(w, "No tasks available", http.StatusServiceUnavailable)
 	})
 
+	// 在 main 函数中添加 HTTP 处理函数
+	http.HandleFunc("/complete", func(w http.ResponseWriter, r *http.Request) {
+		workerIDStr := r.URL.Query().Get("workerId")
+		taskIdStr := r.URL.Query().Get("taskId")
+
+		workerID, err := strconv.Atoi(workerIDStr)
+		if err != nil {
+			http.Error(w, "Invalid workerId", http.StatusBadRequest)
+			return
+		}
+
+		taskId, err := strconv.Atoi(taskIdStr)
+		if err != nil {
+			http.Error(w, "Invalid taskId", http.StatusBadRequest)
+			return
+		}
+
+		// 在这里处理任务完成的逻辑，例如更新任务状态等
+		manager.TaskComplete(taskId, workerID)
+
+		// 返回确认消息
+		if _, err = w.Write([]byte("OK")); err != nil {
+			log.Error().Err(err).Msg("write response error")
+		}
+	})
+
 	log.Fatal().Err(http.ListenAndServe(":2727", nil))
 }
 
 // Task 代表一个任务
 type Task struct {
-	Folder string     `json:"folder"`
-	ID     string     `json:"id"`
-	Files  [][2]int   `json:"files"`
-	Status TaskStatus `json:"status"`
+	Folder string       `json:"folder"`
+	ID     string       `json:"id"`
+	Files  [][2]int     `json:"files"`
+	Status []TaskStatus `json:"status"` // 任务状态数组，与文件范围对应
 }
 
 // TaskManager 管理任务分配
@@ -192,7 +216,7 @@ func (m *TaskManager) addTaskWithWorkerCount(folder string, workerCount int) {
 		Folder: folder,
 		Files:  fileRanges,
 		ID:     id,
-		Status: TaskIdle,
+		Status: make([]TaskStatus, workerCount),
 	})
 }
 
@@ -204,7 +228,12 @@ func (m *TaskManager) AssignTask(workerID int) (string, string, [2]int, bool) {
 	// 获取工作机当前任务
 	currentTaskIndex, ok := m.WorkerCurrent[workerID]
 	if ok {
-		// 移动到下一个任务
+		task := m.Tasks[currentTaskIndex]
+		// 检查当前工作机处理的文件范围是否已完成
+		if workerID < len(task.Files) && task.Status[workerID] != TaskCompleted {
+			return task.Folder, task.ID, task.Files[workerID], true
+		}
+		// 如果当前任务已完成，移动到下一个任务
 		currentTaskIndex++
 	} else {
 		// 如果工作机还没有任务分配一个任务
@@ -215,12 +244,22 @@ func (m *TaskManager) AssignTask(workerID int) (string, string, [2]int, bool) {
 		task := m.Tasks[currentTaskIndex]
 		// 更新工作机当前任务
 		m.WorkerCurrent[workerID] = currentTaskIndex
-		if workerID < len(task.Files) {
+		// 检查当前工作机处理的文件范围是否已完成
+		if workerID < len(task.Files) && task.Status[workerID] != TaskCompleted {
 			return task.Folder, task.ID, task.Files[workerID], true
 		}
 	}
 
 	return "", "", [2]int{}, false
+}
+
+func (m *TaskManager) TaskComplete(taskIndex int, workerId int) {
+	m.Mutex.Lock()
+	defer m.Mutex.Unlock()
+
+	if taskIndex < len(m.Tasks) && workerId < len(m.Tasks[taskIndex].Files) {
+		m.Tasks[taskIndex].Status[workerId] = TaskCompleted
+	}
 }
 
 // isPostComplete 判断1个节点是否已P完

@@ -1,11 +1,12 @@
-name: Build and Release
+name: build
 
 on:
-  release:
-    types: [created]
+  create:
+    tags:
+      - '*'
 
 jobs:
-  releases-matrix:
+  build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
