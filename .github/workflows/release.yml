@@ -1,12 +1,11 @@
-name: build
+name: Build and Release
 
 on:
   push:
     tags:
       - '*'
-
 jobs:
-  build:
+  releases-matrix:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -22,6 +21,6 @@ jobs:
           goarch: ${{ matrix.goarch }}
           ldflags: "-w -s"
           compress_assets: "OFF"
-          asset_name: smx
+          asset_name: smx-${{ matrix.goarch }}
           md5sum: false
           overwrite: true
