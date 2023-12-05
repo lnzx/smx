@@ -70,7 +70,7 @@ func main() {
 	}
 
 	http.HandleFunc("/task", func(w http.ResponseWriter, r *http.Request) {
-		workIdStr := r.URL.Query().Get("workId")
+		workIdStr := r.URL.Query().Get("workerId")
 		workId, err := strconv.Atoi(workIdStr)
 		if err != nil {
 			log.Err(err).Msgf("Invalid workId ip %s", r.RemoteAddr)
@@ -104,7 +104,6 @@ func main() {
 	// 在 main 函数中添加 HTTP 处理函数
 	http.HandleFunc("/complete", func(w http.ResponseWriter, r *http.Request) {
 		workerIDStr := r.URL.Query().Get("workerId")
-		taskIdStr := r.URL.Query().Get("taskId")
 
 		workerID, err := strconv.Atoi(workerIDStr)
 		if err != nil {
@@ -112,18 +111,14 @@ func main() {
 			return
 		}
 
-		taskId, err := strconv.Atoi(taskIdStr)
-		if err != nil {
-			http.Error(w, "Invalid taskId", http.StatusBadRequest)
-			return
-		}
-
 		// 在这里处理任务完成的逻辑，例如更新任务状态等
-		manager.TaskComplete(taskId, workerID)
-
-		// 返回确认消息
-		if _, err = w.Write([]byte("OK")); err != nil {
-			log.Error().Err(err).Msg("write response error")
+		if err = manager.TaskComplete(workerID); err == nil {
+			// 返回确认消息
+			if _, err = w.Write([]byte("OK")); err != nil {
+				log.Error().Err(err).Msg("write response error")
+			}
+		} else {
+			log.Error().Err(err).Msg("TaskComplete Error")
 		}
 	})
 
@@ -253,13 +248,22 @@ func (m *TaskManager) AssignTask(workerID int) (string, string, [2]int, bool) {
 	return "", "", [2]int{}, false
 }
 
-func (m *TaskManager) TaskComplete(taskIndex int, workerId int) {
+// TaskComplete 表示当前任务为完成状态
+func (m *TaskManager) TaskComplete(workerId int) error {
 	m.Mutex.Lock()
 	defer m.Mutex.Unlock()
 
-	if taskIndex < len(m.Tasks) && workerId < len(m.Tasks[taskIndex].Files) {
-		m.Tasks[taskIndex].Status[workerId] = TaskCompleted
+	// 获取工作机当前任务
+	currentTaskIndex, ok := m.WorkerCurrent[workerId]
+	if ok {
+		task := m.Tasks[currentTaskIndex]
+		// 检查当前任务的工作机范围
+		if workerId < len(task.Files) {
+			task.Status[workerId] = TaskCompleted
+			return nil
+		}
 	}
+	return errors.New("invalid")
 }
 
 // isPostComplete 判断1个节点是否已P完
