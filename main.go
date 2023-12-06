@@ -74,13 +74,15 @@ func main() {
 
 	http.HandleFunc("/task", func(w http.ResponseWriter, r *http.Request) {
 		workIdStr := r.URL.Query().Get("workerId") // workerId 从1开始
-		workId, err := strconv.Atoi(workIdStr)
+		workerID, err := strconv.Atoi(workIdStr)
 		if err != nil {
 			log.Err(err).Msgf("Invalid workId ip %s", r.RemoteAddr)
 			http.Error(w, "Invalid workId", http.StatusBadRequest)
 			return
 		}
-		folder, id, files, ok := manager.AssignTask(workId)
+		// workerID从1开始，这里的索引从0开始
+		workerID -= 1
+		folder, id, files, ok := manager.AssignTask(workerID)
 		if ok {
 			task := Task{
 				Folder:  folder,
@@ -92,7 +94,7 @@ func main() {
 				http.Error(w, "json marshal error", http.StatusInternalServerError)
 				return
 			}
-			log.Info().Msgf("task %s workId %d", string(rsp), workId)
+			log.Info().Msgf("task %s workId %d", string(rsp), workerID)
 			w.Header().Set("Content-Type", "application/json")
 			if _, err = w.Write(rsp); err != nil {
 				log.Error().Err(err).Msg("write response error")
@@ -111,7 +113,8 @@ func main() {
 			http.Error(w, "Invalid workerId", http.StatusBadRequest)
 			return
 		}
-
+		// workerID从1开始，这里的索引从0开始
+		workerID -= 1
 		// 在这里处理任务完成的逻辑，例如更新任务状态等
 		if err = manager.TaskComplete(workerID); err == nil {
 			log.Info().Msgf("Task completed %d", workerID)
@@ -228,14 +231,13 @@ func (m *TaskManager) addTaskWithWorkerCount(folder string, workerCount int) {
 func (m *TaskManager) AssignTask(workerID int) (string, string, [2]int, bool) {
 	m.Mutex.Lock()
 	defer m.Mutex.Unlock()
-
 	// 获取工作机当前任务
 	currentTaskIndex, ok := m.WorkerCurrent[workerID]
 	if ok {
 		task := m.Tasks[currentTaskIndex]
-		// 检查当前工作机处理的文件范围是否已完成, workerID从1开始，这里的索引从0开始
-		if workerID <= len(task.Subsets) && task.WorkerStatus[workerID] != TaskCompleted {
-			return task.Folder, task.ID, task.Subsets[workerID-1], true
+		//检查当前工作机处理的文件范围是否已完成
+		if workerID < len(task.Subsets) && task.WorkerStatus[workerID] != TaskCompleted {
+			return task.Folder, task.ID, task.Subsets[workerID], true
 		}
 		// 如果当前任务已完成，移动到下一个任务
 		currentTaskIndex++
@@ -248,9 +250,9 @@ func (m *TaskManager) AssignTask(workerID int) (string, string, [2]int, bool) {
 		task := m.Tasks[currentTaskIndex]
 		// 更新工作机当前任务
 		m.WorkerCurrent[workerID] = currentTaskIndex
-		// 检查当前工作机处理的文件范围是否已完成, workerID从1开始，这里的索引从0开始
-		if workerID <= len(task.Subsets) && task.WorkerStatus[workerID] != TaskCompleted {
-			return task.Folder, task.ID, task.Subsets[workerID-1], true
+		// 检查当前工作机处理的文件范围是否已完成
+		if workerID < len(task.Subsets) && task.WorkerStatus[workerID] != TaskCompleted {
+			return task.Folder, task.ID, task.Subsets[workerID], true
 		}
 	}
 
@@ -267,7 +269,7 @@ func (m *TaskManager) TaskComplete(workerId int) error {
 	if ok {
 		task := m.Tasks[currentTaskIndex]
 		// 检查当前任务的工作机范围,workerID从1开始，这里的索引从0开始
-		if workerId <= len(task.Subsets) {
+		if workerId < len(task.Subsets) {
 			task.WorkerStatus[workerId] = TaskCompleted
 			return nil
 		}
