@@ -117,7 +117,6 @@ func main() {
 		workerID -= 1
 		// 在这里处理任务完成的逻辑，例如更新任务状态等
 		if err = manager.TaskComplete(workerID); err == nil {
-			log.Info().Msgf("Task completed %d", workerID)
 			// 返回确认消息
 			if _, err = w.Write([]byte("OK")); err != nil {
 				log.Error().Err(err).Msg("write response error")
