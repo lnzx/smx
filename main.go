@@ -20,6 +20,7 @@ import (
 const (
 	edKeyFileName  = "key.bin"
 	PostDataPrefix = "postdata_"
+	skipFileName   = "skip"
 )
 
 var (
@@ -152,7 +153,7 @@ func (m *TaskManager) InitializeTasksWithWorkerCount(diskPaths []string, workerC
 	defer m.Mutex.Unlock()
 
 	for _, path := range diskPaths {
-		for i := 0; i < perDiskNodeCount; i++ {
+		for i := 1; i <= perDiskNodeCount; i++ {
 			folder := filepath.Join(path, fmt.Sprintf("post-%d", i))
 			log.Info().Msgf("init folder %s", folder)
 			// 检查文件夹是否存在
@@ -165,6 +166,13 @@ func (m *TaskManager) InitializeTasksWithWorkerCount(diskPaths []string, workerC
 					continue // 如果创建失败，跳过这个文件夹
 				}
 			} else {
+				// 检查是否为要跳过的目录
+				skipFile := filepath.Join(folder, skipFileName)
+				if _, err := os.Stat(skipFile); err == nil {
+					log.Info().Msgf("skip folder %s", folder)
+					continue
+				}
+
 				filename := filepath.Join(folder, edKeyFileName)
 				if _, err := os.Stat(filename); os.IsNotExist(err) {
 					id, err := genKey(folder)
