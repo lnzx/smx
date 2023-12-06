@@ -94,7 +94,7 @@ func main() {
 				http.Error(w, "json marshal error", http.StatusInternalServerError)
 				return
 			}
-			log.Info().Msgf("task %s workId %d", string(rsp), workerID)
+			log.Info().Msgf("task %s workId %d", string(rsp), workerID+1)
 			w.Header().Set("Content-Type", "application/json")
 			if _, err = w.Write(rsp); err != nil {
 				log.Error().Err(err).Msg("write response error")
