@@ -21,13 +21,9 @@ const (
 	edKeyFileName  = "key.bin"
 	PostDataPrefix = "postdata_"
 	skipFileName   = "skip"
+	NodeFileCount  = 64
+	PerFileSize    = 4 * 1024 * 1024 * 1024
 )
-
-var (
-	ErrKeyFileExists = errors.New("key file already exists")
-)
-
-type TaskStatus int
 
 const (
 	TaskIdle TaskStatus = iota
@@ -35,12 +31,14 @@ const (
 	TaskCompleted
 )
 
-var perDiskNodeCount = 1
-
-const (
-	NodeFileCount = 64
-	PerFileSize   = 4 * 1024 * 1024 * 1024
+var (
+	ErrKeyFileExists = errors.New("key file already exists")
+	perDiskNodeCount = 1
 )
+
+type TaskStatus int
+
+var version = "0.0.1"
 
 func init() {
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
@@ -48,6 +46,10 @@ func init() {
 }
 
 func main() {
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Version: %s\nUsage: %s [args]\n", version, os.Args[0])
+		flag.PrintDefaults()
+	}
 	// 定义命令行参数
 	flag.IntVar(&perDiskNodeCount, "node", 1, "Number of nodes per disk")
 	disksStr := flag.String("disks", "", "Comma-separated list of disk paths")
@@ -71,20 +73,19 @@ func main() {
 	}
 
 	http.HandleFunc("/task", func(w http.ResponseWriter, r *http.Request) {
-		workIdStr := r.URL.Query().Get("workerId")
+		workIdStr := r.URL.Query().Get("workerId") // workerId 从1开始
 		workId, err := strconv.Atoi(workIdStr)
 		if err != nil {
 			log.Err(err).Msgf("Invalid workId ip %s", r.RemoteAddr)
 			http.Error(w, "Invalid workId", http.StatusBadRequest)
 			return
 		}
-
 		folder, id, files, ok := manager.AssignTask(workId)
 		if ok {
 			task := Task{
-				Folder: folder,
-				ID:     id,
-				Files:  [][2]int{files},
+				Folder:  folder,
+				ID:      id,
+				Subsets: [][2]int{files},
 			}
 			rsp, err := json.Marshal(task)
 			if err != nil {
@@ -102,7 +103,6 @@ func main() {
 		http.Error(w, "No tasks available", http.StatusServiceUnavailable)
 	})
 
-	// 在 main 函数中添加 HTTP 处理函数
 	http.HandleFunc("/complete", func(w http.ResponseWriter, r *http.Request) {
 		workerIDStr := r.URL.Query().Get("workerId")
 
@@ -114,6 +114,7 @@ func main() {
 
 		// 在这里处理任务完成的逻辑，例如更新任务状态等
 		if err = manager.TaskComplete(workerID); err == nil {
+			log.Info().Msgf("Task completed %d", workerID)
 			// 返回确认消息
 			if _, err = w.Write([]byte("OK")); err != nil {
 				log.Error().Err(err).Msg("write response error")
@@ -128,10 +129,10 @@ func main() {
 
 // Task 代表一个任务
 type Task struct {
-	Folder string       `json:"folder"`
-	ID     string       `json:"id"`
-	Files  [][2]int     `json:"files"`
-	Status []TaskStatus `json:"-"` // 任务状态数组，与文件范围对应
+	Folder       string       `json:"folder"`
+	ID           string       `json:"id"`
+	Subsets      [][2]int     `json:"subsets"`
+	WorkerStatus []TaskStatus `json:"-"` // 任务状态数组，与文件范围对应
 }
 
 // TaskManager 管理任务分配
@@ -155,10 +156,9 @@ func (m *TaskManager) InitializeTasksWithWorkerCount(diskPaths []string, workerC
 	for _, path := range diskPaths {
 		for i := 1; i <= perDiskNodeCount; i++ {
 			folder := filepath.Join(path, fmt.Sprintf("post-%d", i))
-			log.Info().Msgf("init folder %s", folder)
 			// 检查文件夹是否存在
 			if _, err := os.Stat(folder); os.IsNotExist(err) {
-				log.Info().Msgf("folder is not exist %s, creating now", folder)
+				log.Info().Msgf("%s folder is not exist creating now", folder)
 				// 文件夹不存在，直接生成key.bin,会自动创建文件夹
 				_, err = genKey(folder)
 				if err != nil {
@@ -169,25 +169,26 @@ func (m *TaskManager) InitializeTasksWithWorkerCount(diskPaths []string, workerC
 				// 检查是否为要跳过的目录
 				skipFile := filepath.Join(folder, skipFileName)
 				if _, err := os.Stat(skipFile); err == nil {
-					log.Info().Msgf("skip folder %s", folder)
+					log.Info().Msgf("%s folder skipped", folder)
 					continue
 				}
 
 				filename := filepath.Join(folder, edKeyFileName)
-				if _, err := os.Stat(filename); os.IsNotExist(err) {
+				if _, err = os.Stat(filename); os.IsNotExist(err) {
 					id, err := genKey(folder)
 					if err != nil {
 						log.Warn().Err(err).Msgf("failed to gen key.bin %s", filename)
 						continue // 如果创建失败，跳过这个文件夹
 					}
-					log.Info().Msgf("gen key.bin ID %s", filename, *id)
+					log.Info().Msgf("%s folder gen key.bin ID %s", folder, *id)
 				}
 			}
 
 			// 判断文件夹是否已经P完了
 			if isPostComplete(folder) {
-				log.Info().Msgf("is post complete: %s", folder)
+				log.Info().Msgf("%s folder is complete", folder)
 			} else {
+				log.Info().Msgf("%s folder initialization", folder)
 				m.addTaskWithWorkerCount(folder, workerCount)
 			}
 		}
@@ -216,10 +217,10 @@ func (m *TaskManager) addTaskWithWorkerCount(folder string, workerCount int) {
 	}
 
 	m.Tasks = append(m.Tasks, &Task{
-		Folder: folder,
-		Files:  fileRanges,
-		ID:     id,
-		Status: make([]TaskStatus, workerCount),
+		Folder:       folder,
+		Subsets:      fileRanges,
+		ID:           id,
+		WorkerStatus: make([]TaskStatus, workerCount),
 	})
 }
 
@@ -232,9 +233,9 @@ func (m *TaskManager) AssignTask(workerID int) (string, string, [2]int, bool) {
 	currentTaskIndex, ok := m.WorkerCurrent[workerID]
 	if ok {
 		task := m.Tasks[currentTaskIndex]
-		// 检查当前工作机处理的文件范围是否已完成
-		if workerID < len(task.Files) && task.Status[workerID] != TaskCompleted {
-			return task.Folder, task.ID, task.Files[workerID], true
+		// 检查当前工作机处理的文件范围是否已完成, workerID从1开始，这里的索引从0开始
+		if workerID <= len(task.Subsets) && task.WorkerStatus[workerID] != TaskCompleted {
+			return task.Folder, task.ID, task.Subsets[workerID-1], true
 		}
 		// 如果当前任务已完成，移动到下一个任务
 		currentTaskIndex++
@@ -247,9 +248,9 @@ func (m *TaskManager) AssignTask(workerID int) (string, string, [2]int, bool) {
 		task := m.Tasks[currentTaskIndex]
 		// 更新工作机当前任务
 		m.WorkerCurrent[workerID] = currentTaskIndex
-		// 检查当前工作机处理的文件范围是否已完成
-		if workerID < len(task.Files) && task.Status[workerID] != TaskCompleted {
-			return task.Folder, task.ID, task.Files[workerID], true
+		// 检查当前工作机处理的文件范围是否已完成, workerID从1开始，这里的索引从0开始
+		if workerID <= len(task.Subsets) && task.WorkerStatus[workerID] != TaskCompleted {
+			return task.Folder, task.ID, task.Subsets[workerID-1], true
 		}
 	}
 
@@ -265,13 +266,13 @@ func (m *TaskManager) TaskComplete(workerId int) error {
 	currentTaskIndex, ok := m.WorkerCurrent[workerId]
 	if ok {
 		task := m.Tasks[currentTaskIndex]
-		// 检查当前任务的工作机范围
-		if workerId < len(task.Files) {
-			task.Status[workerId] = TaskCompleted
+		// 检查当前任务的工作机范围,workerID从1开始，这里的索引从0开始
+		if workerId <= len(task.Subsets) {
+			task.WorkerStatus[workerId] = TaskCompleted
 			return nil
 		}
 	}
-	return errors.New("invalid")
+	return errors.New("no task found")
 }
 
 // isPostComplete 判断1个节点是否已P完
@@ -299,7 +300,7 @@ func isPostComplete(folder string) bool {
 	})
 
 	if err != nil {
-		return false
+		return true
 	}
 
 	return fileCount == NodeFileCount
