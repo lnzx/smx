@@ -190,9 +190,10 @@ func (m *TaskManager) InitializeTasksWithWorkerCount(diskPaths []string, workerC
 					log.Info().Msgf("%s folder is post complete", folder)
 					continue
 				}
+
+				log.Info().Msgf("%s folder initialization", folder)
 			}
 
-			log.Info().Msgf("%s folder initialization", folder)
 			m.addTaskWithWorkerCount(folder, workerCount)
 		}
 	}
@@ -314,7 +315,6 @@ func genKey(dataDir string) (*string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error: failed to generate identity: %w", err)
 	}
-	log.Info().Msgf("cli: generated id %x\n", pub)
 	if err = saveKey(priv, dataDir); err != nil {
 		return nil, err
 	}
