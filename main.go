@@ -184,15 +184,16 @@ func (m *TaskManager) InitializeTasksWithWorkerCount(diskPaths []string, workerC
 					}
 					log.Info().Msgf("%s folder gen key.bin ID %s", folder, *id)
 				}
+
+				// 判断文件夹是否已经P完了
+				if isPostComplete(folder) {
+					log.Info().Msgf("%s folder is post complete", folder)
+					continue
+				}
 			}
 
-			// 判断文件夹是否已经P完了
-			if isPostComplete(folder) {
-				log.Info().Msgf("%s folder is complete", folder)
-			} else {
-				log.Info().Msgf("%s folder initialization", folder)
-				m.addTaskWithWorkerCount(folder, workerCount)
-			}
+			log.Info().Msgf("%s folder initialization", folder)
+			m.addTaskWithWorkerCount(folder, workerCount)
 		}
 	}
 }
