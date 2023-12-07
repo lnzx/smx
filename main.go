@@ -147,7 +147,7 @@ type Task struct {
 	Folder       string       `json:"folder"`
 	ID           string       `json:"id"`
 	Subsets      [][2]int     `json:"subsets"`
-	WorkerStatus []TaskStatus `json:"-"` // 任务状态数组，与文件范围对应
+	WorkerStatus []TaskStatus `json:"status"` // 任务状态数组，与文件范围对应
 }
 
 // TaskManager 管理任务分配
