@@ -266,6 +266,7 @@ func (m *TaskManager) AssignTask(workerID int) (string, string, [2]int, bool) {
 		m.WorkerCurrent[workerID] = currentTaskIndex
 		// 检查当前工作机处理的文件范围是否已完成
 		if workerID < len(task.Subsets) && task.WorkerStatus[workerID] != TaskCompleted {
+			task.WorkerStatus[workerID] = TaskInProgress
 			return task.Folder, task.ID, task.Subsets[workerID], true
 		}
 	}
