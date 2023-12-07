@@ -125,6 +125,19 @@ func main() {
 			log.Error().Err(err).Msg("TaskComplete Error")
 		}
 	})
+	// 获取所有任务详情
+	http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+		tasks := manager.Tasks
+		rsp, err := json.Marshal(tasks)
+		if err != nil {
+			http.Error(w, "json marshal error", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if _, err = w.Write(rsp); err != nil {
+			log.Error().Err(err).Msg("write metrics response error")
+		}
+	})
 
 	log.Fatal().Err(http.ListenAndServe(":2727", nil))
 }
