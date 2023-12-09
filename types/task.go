@@ -43,7 +43,7 @@ func NewTaskManager() *TaskManager {
 	return &TaskManager{
 		Tasks:         make([]*Task, 0),
 		WorkerCurrent: make(map[int]int),
-		TimedSet:      NewTimedSet(70 * time.Second), // 创建一个新的NewTimedSet，超时时间为70s
+		TimedSet:      NewTimedSet(120 * time.Second), // 创建一个新的NewTimedSet，超时时间为70s
 	}
 }
 
